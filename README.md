@@ -1,238 +1,344 @@
--- Limitador de Velocidade com TextBox
--- Você escolhe a velocidade máxima
+-- ====================================================================
+-- SCRIPT DE BODY-SWAP: CAPTURA O CARRO DO JOGO, OCULTA LATARIA E APLICA MESH
+-- ====================================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- ===== CONFIGURAÇÃO =====
-local VelocidadeMaxima = 120
-local Ativado = false
--- =========================
+local currentCarData = ""
+local attachedCarModel = nil
+local customMeshHolder = nil
+local isBodyHidden = false
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SpeedLimitGUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+---------------------------------------------------------------------
+-- CONFIGURAÇÕES DE OFFSET E ROTAÇÃO DA MESH SOBRE O CARRO
+---------------------------------------------------------------------
+local meshOffset = { X = 0, Y = 0, Z = 0 }
+local meshRotation = { Pitch = 0, Yaw = 0, Roll = 0 }
 
--- Janela principal
-local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 260, 0, 150)
-Frame.Position = UDim2.new(0.5, -130, 0.2, 0)
-Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-Frame.BorderSizePixel = 0
-Frame.Active = true
-Frame.Draggable = true
-Frame.Parent = ScreenGui
+---------------------------------------------------------------------
+-- FUNÇÃO PARA ATUALIZAR A POSIÇÃO DA MESH NO CARRO
+---------------------------------------------------------------------
+local function updateMeshTransform()
+    if not customMeshHolder or not attachedCarModel then return end
+    local rootPart = attachedCarModel.PrimaryPart or attachedCarModel:FindFirstChildWhichIsA("BasePart")
+    if not rootPart then return end
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 10)
-UICorner.Parent = Frame
+    local weld = customMeshHolder:FindFirstChild("MeshWeld")
+    if weld then
+        local posCFrame = CFrame.new(meshOffset.X, meshOffset.Y, meshOffset.Z)
+        local rotCFrame = CFrame.Angles(
+            math.rad(meshRotation.Pitch),
+            math.rad(meshRotation.Yaw),
+            math.rad(meshRotation.Roll)
+        )
+        weld.C0 = posCFrame * rotCFrame
+    end
+end
 
--- Botão X
-local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.new(0, 30, 0, 30)
-CloseButton.Position = UDim2.new(1, -35, 0, 5)
-CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseButton.Text = "X"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.TextSize = 16
-CloseButton.Parent = Frame
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 6)
-CloseCorner.Parent = CloseButton
-
--- Título
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -40, 0, 30)
-Title.Position = UDim2.new(0, 10, 0, 5)
-Title.BackgroundTransparency = 1
-Title.Text = "Limitador de Velocidade"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 16
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = Frame
-
--- TextBox
-local TextBox = Instance.new("TextBox")
-TextBox.Size = UDim2.new(0.85, 0, 0, 32)
-TextBox.Position = UDim2.new(0.075, 0, 0.32, 0)
-TextBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-TextBox.PlaceholderText = "Digite a velocidade máxima..."
-TextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-TextBox.Font = Enum.Font.Gotham
-TextBox.TextSize = 15
-TextBox.Text = tostring(VelocidadeMaxima)
-TextBox.ClearTextOnFocus = false
-TextBox.Parent = Frame
-
-local TextBoxCorner = Instance.new("UICorner")
-TextBoxCorner.CornerRadius = UDim.new(0, 6)
-TextBoxCorner.Parent = TextBox
-
--- Botão Aplicar
-local ApplyButton = Instance.new("TextButton")
-ApplyButton.Size = UDim2.new(0.4, 0, 0, 30)
-ApplyButton.Position = UDim2.new(0.075, 0, 0.58, 0)
-ApplyButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-ApplyButton.Text = "Aplicar"
-ApplyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ApplyButton.Font = Enum.Font.GothamBold
-ApplyButton.TextSize = 14
-ApplyButton.Parent = Frame
-
-local ApplyCorner = Instance.new("UICorner")
-ApplyCorner.CornerRadius = UDim.new(0, 6)
-ApplyCorner.Parent = ApplyButton
-
--- Botão Ligar/Desligar
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(0.4, 0, 0, 30)
-ToggleButton.Position = UDim2.new(0.525, 0, 0.58, 0)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-ToggleButton.Text = "OFF"
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.TextSize = 14
-ToggleButton.Parent = Frame
-
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 6)
-ToggleCorner.Parent = ToggleButton
-
--- Botão flutuante 🧂 pra abrir de novo
-local OpenButton = Instance.new("TextButton")
-OpenButton.Size = UDim2.new(0, 50, 0, 50)
-OpenButton.Position = UDim2.new(0, 20, 0.5, -25)
-OpenButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-OpenButton.Text = "🧂"
-OpenButton.TextSize = 26
-OpenButton.Font = Enum.Font.GothamBold
-OpenButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-OpenButton.Active = true
-OpenButton.Draggable = true
-OpenButton.Visible = false
-OpenButton.Parent = ScreenGui
-
-local OpenCorner = Instance.new("UICorner")
-OpenCorner.CornerRadius = UDim.new(1, 0)
-OpenCorner.Parent = OpenButton
-
--- Funções do carro
-local conexao = nil
-
-local function GetVehicle()
+---------------------------------------------------------------------
+-- CARREGAR E APLICAR A MESH NO CARRO CAPTURADO
+---------------------------------------------------------------------
+local function applyCustomMeshToCar(dataString)
     local char = LocalPlayer.Character
-    if not char then return nil end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if not humanoid or not humanoid.SeatPart then return nil end
-    return humanoid.SeatPart.Parent
-end
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    local seat = humanoid and humanoid.SeatPart
 
-local function GetPrimary(veiculo)
-    return veiculo.PrimaryPart 
-        or veiculo:FindFirstChild("Chassis") 
-        or veiculo:FindFirstChild("Body") 
-        or veiculo:FindFirstChildWhichIsA("BasePart")
-end
+    if not seat or not seat:IsA("VehicleSeat") and not seat:IsA("Seat") then
+        warn("⚠️ Você precisa estar sentado em um carro para aplicar a mesh!")
+        return
+    end
 
-local function LimitarVelocidade()
-    local veiculo = GetVehicle()
-    if not veiculo then return end
-    local primary = GetPrimary(veiculo)
-    if not primary then return end
+    attachedCarModel = seat.Parent
     
-    local velocity = primary.AssemblyLinearVelocity
-    if velocity.Magnitude > VelocidadeMaxima then
-        primary.AssemblyLinearVelocity = velocity.Unit * VelocidadeMaxima
-        for _, part in ipairs(veiculo:GetDescendants()) do
-            if part:IsA("BasePart") then
-                local v = part.AssemblyLinearVelocity
-                if v.Magnitude > VelocidadeMaxima then
-                    part.AssemblyLinearVelocity = v.Unit * VelocidadeMaxima
-                end
+    -- Define uma PrimaryPart se não houver
+    if not attachedCarModel.PrimaryPart then
+        attachedCarModel.PrimaryPart = seat
+    end
+
+    -- 1. Ocultar a lataria original do carro (mantendo rodas e colisão de física)
+    for _, part in ipairs(attachedCarModel:GetDescendants()) do
+        if part:IsA("BasePart") and part ~= seat then
+            local nameLower = part.Name:lower()
+            -- Se não for roda, deixa invisível
+            if not string.find(nameLower, "wheel") and not string.find(nameLower, "pneu") and not string.find(nameLower, "rim") then
+                part.Transparency = 1
+                -- Opcional: part.CanCollide = false (se quiser que só a mesh colida ou deixe a física padrão)
             end
         end
     end
-end
+    isBodyHidden = true
 
-local function Ligar()
-    if conexao then return end
-    Ativado = true
-    ToggleButton.Text = "ON"
-    ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+    -- 2. Limpar mesh anterior se já existir
+    if customMeshHolder then customMeshHolder:Destroy() end
+
+    -- 3. Criar container para a nova mesh
+    customMeshHolder = Instance.new("Model")
+    customMeshHolder.Name = "CustomMeshBody"
+    customMeshHolder.Parent = attachedCarModel
+
+    local rootPart = Instance.new("Part")
+    rootPart.Name = "MeshRoot"
+    rootPart.Size = Vector3.new(2, 1, 4)
+    rootPart.Transparency = 1
+    rootPart.CanCollide = false
+    rootPart.Anchored = false
+    rootPart.Parent = customMeshHolder
+
+    local weld = Instance.new("Weld")
+    weld.Name = "MeshWeld"
+    weld.Part0 = attachedCarModel.PrimaryPart
+    weld.Part1 = rootPart
+    weld.C0 = CFrame.new(meshOffset.X, meshOffset.Y, meshOffset.Z) * CFrame.Angles(
+        math.rad(meshRotation.Pitch), math.rad(meshRotation.Yaw), math.rad(meshRotation.Roll)
+    )
+    weld.Parent = customMeshHolder
+
+    if dataString == "" or not dataString then return end
+
+    -- 4. Interpretar a string da lataria e criar as peças
+    local partsList = string.split(dataString, "|")
+    for _, partInfo in ipairs(partsList) do
+        local data = string.split(partInfo, ";")
+        if #data >= 17 then
+            local pName     = data[1]
+            local meshId    = data[2]
+            local textureId = data[3]
+            local posX      = tonumber(data[4]) or 0
+            local posY      = tonumber(data[5]) or 0
+            local posZ      = tonumber(data[6]) or 0
+            local rotX      = tonumber(data[7]) or 0
+            local rotY      = tonumber(data[8]) or 0
+            local rotZ      = tonumber(data[9]) or 0
+            local scaleX    = tonumber(data[10]) or 1
+            local scaleY    = tonumber(data[11]) or 1
+            local scaleZ    = tonumber(data[12]) or 1
+            local colorR    = tonumber(data[13]) or 255
+            local colorG    = tonumber(data[14]) or 255
+            local colorB    = tonumber(data[15]) or 255
+            local trans     = tonumber(data[16]) or 0
+            local reflect   = tonumber(data[17]) or 0
+
+            local p = Instance.new("Part")
+            p.Name = pName
+            p.Size = Vector3.new(1, 1, 1)
+            p.CanCollide = false
+            p.CanTouch = false
+            p.CanQuery = false
+            p.Anchored = false
+            p.Massless = true
+            p.Transparency = trans
+            p.Reflectance = reflect
+            p.Color = Color3.fromRGB(colorR, colorG, colorB)
+            p.Parent = customMeshHolder
+
+            local m = Instance.new("SpecialMesh")
+            m.MeshType = Enum.MeshType.FileMesh
+            if meshId ~= "" then m.MeshId = "rbxassetid://" .. meshId end
+            if textureId ~= "" then m.TextureId = "rbxassetid://" .. textureId end
+            m.Scale = Vector3.new(scaleX, scaleY, scaleZ)
+            m.Parent = p
+
+            local offsetCFrame = CFrame.new(posX, posY, posZ) * CFrame.Angles(
+                math.rad(rotX), math.rad(rotY), math.rad(rotZ)
+            )
+
+            local w = Instance.new("Weld")
+            w.Part0 = rootPart
+            w.Part1 = p
+            w.C0 = offsetCFrame
+            w.Parent = p
+        end
+    end
     
-    conexao = RunService.Heartbeat:Connect(function()
-        if Ativado then
-            LimitarVelocidade()
-        end
-    end)
+    print("🚗 Custom Mesh aplicada com sucesso sobre o carro do jogo!")
 end
 
-local function Desligar()
-    Ativado = false
-    if conexao then
-        conexao:Disconnect()
-        conexao = nil
-    end
-    ToggleButton.Text = "OFF"
-    ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-end
+---------------------------------------------------------------------
+-- INTERFACE GRÁFICA (UI FLUTUANTE COM MINIMIZAR)
+---------------------------------------------------------------------
+local screenGui = PlayerGui:FindFirstChild("CarSkinChangerUI") or Instance.new("ScreenGui")
+screenGui.Name = "CarSkinChangerUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
 
-local function Toggle()
-    if Ativado then
-        Desligar()
+for _, c in ipairs(screenGui:GetChildren()) do c:Destroy() end
+
+local fullSize = UDim2.new(0, 320, 0, 460)
+local miniSize = UDim2.new(0, 320, 0, 32)
+local isMinimized = false
+
+local frame = Instance.new("Frame")
+frame.Size = fullSize
+frame.Position = UDim2.new(0.02, 0, 0.1, 0)
+frame.BackgroundColor3 = Color3.fromRGB(20, 25, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.ClipsDescendants = true
+frame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 32)
+title.BackgroundColor3 = Color3.fromRGB(35, 45, 55)
+title.Text = "🚗 BODY-SWAP CAR MESH"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 15
+title.Parent = frame
+
+-- BOTÃO DE MINIMIZAR (-)
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 24, 0, 24)
+minBtn.Position = UDim2.new(1, -28, 0, 4)
+minBtn.Text = "-"
+minBtn.BackgroundColor3 = Color3.fromRGB(60, 70, 85)
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.Font = Enum.Font.SourceSansBold
+minBtn.TextSize = 18
+minBtn.ZIndex = 5
+minBtn.Parent = frame
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 4)
+minCorner.Parent = minBtn
+
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, 0, 1, -32)
+scroll.Position = UDim2.new(0, 0, 0, 32)
+scroll.BackgroundTransparency = 1
+scroll.CanvasSize = UDim2.new(0, 0, 0, 620)
+scroll.ScrollBarThickness = 6
+scroll.Parent = frame
+
+minBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        scroll.Visible = false
+        frame.Size = miniSize
+        minBtn.Text = "+"
     else
-        Ligar()
+        scroll.Visible = true
+        frame.Size = fullSize
+        minBtn.Text = "-"
     end
+end)
+
+-- CAMPO DE STRING
+local boxTitle = Instance.new("TextLabel")
+boxTitle.Size = UDim2.new(0.9, 0, 0, 20)
+boxTitle.Position = UDim2.new(0.05, 0, 0.02, 0)
+boxTitle.Text = "Cole a String da Custom Mesh:"
+boxTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+boxTitle.BackgroundTransparency = 1
+boxTitle.Font = Enum.Font.SourceSans
+boxTitle.TextXAlignment = Enum.TextXAlignment.Left
+boxTitle.Parent = scroll
+
+local textBox = Instance.new("TextBox")
+textBox.Size = UDim2.new(0.9, 0, 0, 28)
+textBox.Position = UDim2.new(0.05, 0, 0.06, 0)
+textBox.PlaceholderText = "Cole a string aqui..."
+textBox.Text = ""
+textBox.ClearTextOnFocus = false
+textBox.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+textBox.Font = Enum.Font.SourceSans
+textBox.TextSize = 12
+textBox.Parent = scroll
+
+local btnLoad = Instance.new("TextButton")
+btnLoad.Size = UDim2.new(0.9, 0, 0, 28)
+btnLoad.Position = UDim2.new(0.05, 0, 0.12, 0)
+btnLoad.Text = "🚗 APLICAR NO CARRO ATUAL"
+btnLoad.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+btnLoad.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnLoad.Font = Enum.Font.SourceSansBold
+btnLoad.Parent = scroll
+
+btnLoad.MouseButton1Click:Connect(function()
+    if textBox.Text ~= "" then
+        currentCarData = textBox.Text
+        applyCustomMeshToCar(currentConfigData or currentCarData)
+    end
+end)
+
+-- CRIADOR DE LINHAS DE CONTROLE
+local function addSectionHeader(text, topPosY)
+    local h = Instance.new("TextLabel")
+    h.Size = UDim2.new(0.9, 0, 0, 22)
+    h.Position = UDim2.new(0.05, 0, topPosY, 0)
+    h.Text = "--- " .. text .. " ---"
+    h.TextColor3 = Color3.fromRGB(0, 200, 255)
+    h.BackgroundTransparency = 1
+    h.Font = Enum.Font.SourceSansBold
+    h.TextSize = 14
+    h.Parent = scroll
 end
 
--- Botões
-ApplyButton.MouseButton1Click:Connect(function()
-    local valor = tonumber(TextBox.Text)
-    if valor and valor > 0 then
-        VelocidadeMaxima = valor
-        print("Velocidade máxima definida para: " .. valor)
-    else
-        TextBox.Text = tostring(VelocidadeMaxima)
+local function createControlRow(label, topPosY, targetTable, key, step, isRot)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0.4, 0, 0, 22)
+    lbl.Position = UDim2.new(0.05, 0, topPosY, 0)
+    lbl.Text = label .. ":"
+    lbl.TextColor3 = Color3.fromRGB(220, 220, 220)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.SourceSans
+    lbl.TextSize = 13
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = scroll
+
+    local btnM = Instance.new("TextButton")
+    btnM.Size = UDim2.new(0, 35, 0, 22)
+    btnM.Position = UDim2.new(0.48, 0, topPosY, 0)
+    btnM.Text = "-" .. step
+    btnM.BackgroundColor3 = Color3.fromRGB(160, 50, 50)
+    btnM.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btnM.Font = Enum.Font.SourceSansBold
+    btnM.Parent = scroll
+
+    local btnP = Instance.new("TextButton")
+    btnP.Size = UDim2.new(0, 35, 0, 22)
+    btnP.Position = UDim2.new(0.62, 0, topPosY, 0)
+    btnP.Text = "+" .. step
+    btnP.BackgroundColor3 = Color3.fromRGB(50, 160, 50)
+    btnP.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btnP.Font = Enum.Font.SourceSansBold
+    btnP.Parent = scroll
+
+    local val = Instance.new("TextLabel")
+    val.Size = UDim2.new(0, 45, 0, 22)
+    val.Position = UDim2.new(0.76, 0, topPosY, 0)
+    val.Text = "0"
+    val.TextColor3 = Color3.fromRGB(255, 255, 255)
+    val.BackgroundTransparency = 1
+    val.Font = Enum.Font.SourceSansBold
+    val.Parent = scroll
+
+    local function modify(dir)
+        targetTable[key] = math.floor((targetTable[key] + (dir * step)) * 100) / 100
+        val.Text = tostring(targetTable[key]) .. (isRot and "°" or "")
+        updateMeshTransform()
     end
-end)
 
-ToggleButton.MouseButton1Click:Connect(Toggle)
+    btnM.MouseButton1Click:Connect(function() modify(-1) end)
+    btnP.MouseButton1Click:Connect(function() modify(1) end)
+end
 
-CloseButton.MouseButton1Click:Connect(function()
-    Frame.Visible = false
-    OpenButton.Visible = true
-end)
+-- SEÇÕES DE AJUSTE DA MESH SOBRE O CARRO
+addSectionHeader("AJUSTE DE POSIÇÃO DA MESH", 0.20)
+createControlRow("Lado (X)",    0.25, meshOffset, "X", 0.2, false)
+createControlRow("Altura (Y)",  0.30, meshOffset, "Y", 0.2, false)
+createContextRow = createControlRow
+createControlRow("Frente (Z)",  0.35, meshOffset, "Z", 0.2, false)
 
-OpenButton.MouseButton1Click:Connect(function()
-    Frame.Visible = true
-    OpenButton.Visible = false
-end)
-
-TextBox.FocusLost:Connect(function(enter)
-    if enter then
-        local valor = tonumber(TextBox.Text)
-        if valor and valor > 0 then
-            VelocidadeMaxima = valor
-            print("Velocidade máxima definida para: " .. valor)
-        end
-    end
-end)
-
--- Tecla L também liga/desliga
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.L then
-        Toggle()
-    end
-end)
-
-print("Limitador de Velocidade carregado!")
-print("Digite a velocidade e clique em Aplicar")
-print("Use o botão ON/OFF ou a tecla L")ScreenGui.Parent
+addSectionHeader("AJUSTE DE ROTAÇÃO DA MESH", 0.43)
+createControlRow("Inclinção (Pitch)", 0.48, meshRotation, "Pitch", 5, true)
+createControlRow("Girar (Yaw)",        0.53, meshRotation, "Yaw", 5, true)
+createControlRow("Lado (Roll)",        0.58, meshRotation, "Roll", 5, true)
